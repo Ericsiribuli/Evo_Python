@@ -1,0 +1,96 @@
+from sys import argv
+import os
+import re
+import multiprocessing
+import numpy as np
+import math
+import random
+from scipy.stats import pearsonr
+input1,output1=argv[1:]
+
+wt="ATGTCCACAAAATCATATACCAGTAGAGCTGAGACTCATGCAAGTCCGGTTGCATCGAAACTTTTACGTTTAATGGATGAAAAGAAGACCAATTTGTGTGCTTCTCTTGACGTTCGTTCGACTGATGAGCTATTGAAACTTGTTGAAACGTTGGGTCCATACATTTGCCTTTTGAAAACACACGTTGATATCTTGGATGATTTCAGTTATGAGGGTACTGTCGTTCCATTGAAAGCATTGGCAGAGAAATACAAGTTCTTGATATTTGAGGACAGAAAATTCGCCGATATCGGTAACACAGTCAAATTACAATATACATCGGGCGTTTACCGTATCGCAGAATGGTCTGATATCACCAACGCCCACGGGGTTACTGGTGCTGGTATTGTTGCTGGCTTGAAACAAGGTGCGCAAGAGGTCACCAAAGAACCAAGGGGATTATTGATGCTTGCTGAATTGTCTTCCAAGGGTTCTCTAGCACACGGTGAATATACTAAGGGTACCGTTGATATTGCAAAGAGTGATAAAGATTTCGTTATTGGGTTCATTGCTCAGAACGATATGGGAGGAAGAGAAGAAGGGTTTGATTGGCTAATCATGACCCCAGGTGTAGGTTTAGACGACAAAGGCGATGCATTGGGTCAGCAGTACAGAACCGTCGACGAAGTTGTAAGTGGTGGATCAGATATCATCATTGTTGGCAGAGGACTTTTCGCCAAGGGTAGAGATCCTAAGGTTGAAGGTGAAAGATACAGAAATGCTGGATGGGAAGCGTACCAAAAGAGAATCAGCGCTCCCCATTAA"
+
+with open(input1,"r") as input_rere:#得到umi以及对应的genotype
+    umi_geno_dict = {}
+    pra_input = input_rere.read().strip(">").split(">")
+    for line in pra_input:
+        zwm_name = line.strip().split("\n")[0]
+        line2 = line.strip().split("\n")
+        geno = line2[1].split(" ")[0].split("_")[1][:804]
+        umi1 = line2[1].split(" ")[1][:20]
+        if umi1 in umi_geno_dict:
+            umi_geno_dict[umi1].append(geno)
+        else:
+            umi_geno_dict[umi1] = [geno]
+
+last_dict = {}
+number_singele = 0
+singe_set = set()
+geno_all_set = set()
+
+for line in umi_geno_dict:
+    mut_dict = {}
+    number_mut = 0
+    if len(np.unique(umi_geno_dict[line]))==1:
+        mut = ""
+        geno_myy = "".join(np.unique(umi_geno_dict[line]))
+        if geno_myy == wt:
+            last_dict[line] = wt + "\t" + "WT" + "\t" + "0"
+            geno_all_set.add("wt")
+        else:
+            mut_dict[geno_myy] = []
+            for i in range(804):
+                if geno_myy[i] != wt[i]:
+                    mut_cluster = wt[i] + str(i+1) + geno_myy[i]
+                    mut_dict[geno_myy].append(mut_cluster)
+            mut_list = ",".join(mut_dict[geno_myy])
+            number_mut = len(mut_dict[geno_myy])
+            last_dict[line] = geno_myy + "\t" + str(mut_list) + "\t" + str(number_mut)
+            geno_all_set.add(mut_list)
+            if number_mut == 1:
+                number_singele += 1
+                singe_set.add(mut_list)
+
+    else: #一对多
+        geno_dict={}
+        uni_gen=np.unique(umi_geno_dict[line])
+        for ii in uni_gen:
+            geno_dict[ii]=umi_geno_dict[line].count(ii)
+        sort_geno_dict=sorted(geno_dict.items(),key=lambda geno_dict:geno_dict[1],reverse=True)
+        a=sort_geno_dict[0][1]
+        c=0
+        for iiii in sort_geno_dict[1:]:
+            if iiii[1]>=a:
+                c=1
+        if c!=1:
+            mutant1 = 0
+            genotype1 = ""
+            geno_myy = sort_geno_dict[0][0]
+            if geno_myy == wt:
+                last_dict[line] = wt + "\t" + "WT" + "\t" + "0"
+                geno_all_set.add("wt")
+            else:
+                mut_dict[geno_myy] = []
+                for xx in range(804):
+                    if geno_myy[xx] != wt[xx]:
+                        mut_cluster = wt[xx] + str(xx+1) + geno_myy[xx]
+                        mut_dict[geno_myy].append(mut_cluster)
+                mut_list = ",".join(mut_dict[geno_myy])
+                number_mut = len(mut_dict[geno_myy])
+                last_dict[line] = geno_myy + "\t" + str(mut_list) + "\t" + str(number_mut)
+                geno_all_set.add(mut_list)
+                if number_mut == 1:
+                    number_singele += 1
+                    singe_set.add(mut_list)
+
+
+out_file = open(output1,"w")
+
+for last_umi in last_dict.keys():
+    out_file.write(last_umi + "\t" + last_dict[last_umi] + "\n")
+
+print("Number of single (above all umi) is" + str(number_singele))
+print("Kinds of single geno is" + str(len(singe_set)))
+print("Kinds of geno is" + str(len(geno_all_set)))
+
+out_file.close()
